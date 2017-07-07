@@ -16,6 +16,7 @@ import static android.support.test.espresso.matcher.ViewMatchers.withId;
 /**
  * @author Saeed Masoumi (saeed@6thsolution.com)
  */
+
 @MediumTest
 @RunWith(AndroidJUnit4.class)
 public class ActivityViewTest {

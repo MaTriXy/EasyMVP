@@ -7,6 +7,7 @@ import android.view.View;
 
 import easymvp.annotation.CustomView;
 import easymvp.annotation.Presenter;
+import easymvp.annotation.PresenterId;
 
 import static junit.framework.Assert.assertNotNull;
 import static junit.framework.Assert.assertTrue;
@@ -19,6 +20,10 @@ public class SimpleCustomView extends View implements View1 {
 
     @Presenter
     TestPresenter testPresenter;
+
+    @PresenterId
+    int presenterId = 1_000;
+
 
     public SimpleCustomView(Context context) {
         super(context);
@@ -33,6 +38,11 @@ public class SimpleCustomView extends View implements View1 {
         super(context, attrs, defStyleAttr);
     }
 
+    public SimpleCustomView(Context context, int counter) {
+        super(context);
+        presenterId += counter;
+    }
+
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
@@ -40,8 +50,4 @@ public class SimpleCustomView extends View implements View1 {
         assertTrue(testPresenter.isOnViewAttachedCalled());
     }
 
-    @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-    }
 }

@@ -1,9 +1,17 @@
 # EasyMVP 
 [![Build Status](https://travis-ci.org/6thsolution/EasyMVP.svg?branch=master)](https://travis-ci.org/6thsolution/EasyMVP)  [ ![Download](https://api.bintray.com/packages/6thsolution/easymvp/easymvp-plugin/images/download.svg) ](https://bintray.com/6thsolution/easymvp/easymvp-plugin/_latestVersion)
+[![Android Arsenal](https://img.shields.io/badge/Android%20Arsenal-EasyMVP-orange.svg?style=flat)](http://android-arsenal.com/details/1/4579)
 
 A powerful, and very simple MVP library with **annotation processing** and **bytecode weaving**.
 
 EasyMVP eliminates the boilerplate code for dealing with MVP implementation.
+
+<table>
+  <tr>
+    <td>:book: <a href="https://github.com/6thsolution/EasyMVP/blob/master/README-zh.md">Chinese Readme 中文文档
+</a></td>
+  </tr>
+</table>
 
 - [Features](#features)
 - [Installation](#installation)
@@ -16,8 +24,10 @@ EasyMVP eliminates the boilerplate code for dealing with MVP implementation.
     - [DataMapper](#datamapper)
 - [FAQ](#faq)
 - [Documentations](#documentations)
+- [Demo](#demo)
 - [Author](#author)
 - [License](#license)
+- [Changelog](https://github.com/6thsolution/EasyMVP/blob/master/CHANGELOG.md)
 
 ## Features
 * Easy integration
@@ -32,10 +42,17 @@ Configure your project-level `build.gradle` to include the 'easymvp' plugin:
 ```groovy
 buildscript {
   repositories {
-    jcenter()
+    ...
+    maven { url  "http://dl.bintray.com/6thsolution/easymvp" }
    }
   dependencies {
-    classpath 'com.sixthsolution.easymvp:easymvp-plugin:1.0.1'
+    classpath 'com.sixthsolution.easymvp:easymvp-plugin:1.2.0-beta8'
+  }
+}
+allprojects {
+  repositories {
+      ...
+      maven { url  "http://dl.bintray.com/6thsolution/easymvp" }
   }
 }
 ```
@@ -62,6 +79,17 @@ dependencies {
 }
 
 ```
+Also EasyMVP supports RxJava2:
+```groovy
+apply plugin: 'easymvp-rx2'
+
+dependencies {
+  compile 'io.reactivex.rxjava2:rxjava:x.y.z'
+}
+
+```
+
+**Note:** All snapshot versions are available on [jfrog](https://oss.jfrog.org/oss-snapshot-local/com/sixthsolution/easymvp/)
 
 ## Usage
 
@@ -374,19 +402,31 @@ How does EasyMVP work under the hood?
 - EasyMVP uses bytecode weaving to call delegate classes inside your view implementation classes. You can find these manipulated classes in `build/weaver` folder.
 
 Is there any restrictions on using EasyMVP?
-- EasyMVP uses android's transform API for bytecode weaving. Related to this [issue](https://code.google.com/p/android/issues/detail?id=210730) the [Jack](https://source.android.com/source/jack.html) toolchain doesn't support it yet.
+- ~~EasyMVP uses android's transform API for bytecode weaving. Related to this [issue](https://code.google.com/p/android/issues/detail?id=210730) the [Jack](https://source.android.com/source/jack.html) toolchain doesn't support it yet.~~ ([Jack toolchain is now deprecated](https://android-developers.googleblog.com/2017/03/future-of-java-8-language-feature.html))
+
+Does it support kotlin?
+- Yes, See this [issue](https://github.com/6thsolution/EasyMVP/issues/22) for details.
 
 ## Documentations
 EasyMVP [API](http://6thsolution.github.io/EasyMVP/api-javadoc/): Javadocs for the current API release
 
 EasyMVP [RX-API](http://6thsolution.github.io/EasyMVP/rx-api-javadoc/): Javadocs for the current RX-API (Clean Architecture API) release
 
+EasyMVP [RX2-API](http://6thsolution.github.io/EasyMVP/rx2-api-javadoc/): Javadocs for the current RX2-API (Clean Architecture API) release
+
+## Demo
+[CleanTvMaze](https://github.com/mohamad-amin/CleanTvMaze) Shows how to use EasyMVP with Kotlin
+
+[TVProgram_Android](https://github.com/leonard2014/tvProgram_android) Shows how to use EasyMVP with Java
+
+
+
 ## Author
 [Saeed Masoumi](https://github.com/SaeedMasoumi) 
 
 ## License
 ```
-Copyright 2016 6thSolution
+Copyright 2016-2017 6thSolution Technologies Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

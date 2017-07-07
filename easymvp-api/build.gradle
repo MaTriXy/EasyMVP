@@ -7,5 +7,6 @@ targetCompatibility = ver.targetCompatibilityVersion
 dependencies {
     compile deps.javax
     compile deps.jsr305
+
     compileOnly deps.android
 }

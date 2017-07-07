@@ -18,12 +18,12 @@
 
 package easymvp.weaver;
 
-import java.util.Arrays;
-import java.util.Set;
-
 import easymvp.annotation.ActivityView;
 import easymvp.annotation.CustomView;
 import easymvp.annotation.FragmentView;
+import easymvp.annotation.conductor.ConductorController;
+import java.util.Arrays;
+import java.util.Set;
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
@@ -41,8 +41,10 @@ import static easymvp.weaver.JavassistUtils.stringToCtClass;
  * <p>
  * After generating <code>ViewDelegate</code> classes, this processor will run and do these things:
  * <ol>
- * <li>Finds all classes that annotated with {@link ActivityView} ,{@link FragmentView} and {@link CustomView}.</li>
- * <li>For each view, Adds a field correspond to his generated <code>ViewDelegate</code> class.</li>
+ * <li>Finds all classes that annotated with {@link ActivityView} ,{@link FragmentView} and {@link
+ * CustomView}.</li>
+ * <li>For each view, Adds a field correspond to his generated <code>ViewDelegate</code>
+ * class.</li>
  * <li>Invokes all methods from injected field in the right place of view lifecycle.</li>
  * </ol>
  *
@@ -54,13 +56,22 @@ public class ViewDelegateBinder extends WeaverProcessor {
     private static final String FIELD_PRESENTER_PROVIDER = "$$presenterProvider";
 
     private static final String BUNDLE_CLASS = "android.os.Bundle";
+    private static final String LAYOUT_INFLATER_CLASS = "android.view.LayoutInflater";
+    private static final String VIEW_GROUP_CLASS = "android.view.ViewGroup";
+    private static final String VIEW_CLASS = "android.view.View";
+
     private static final String POINT_CUT = "org.aspectj.lang.JoinPoint";
 
-    private static final String STATEMENT_CALL_INITIALIZE = "$s." + FIELD_VIEW_DELEGATE + ".initialize($s);";
+    private static final String STATEMENT_CALL_INITIALIZE =
+            "$s." + FIELD_VIEW_DELEGATE + ".initialize($s);";
     private static final String STATEMENT_CALL_INITIALIZE_WITH_FACTORY =
             "$s." + FIELD_VIEW_DELEGATE + ".initialize($s, $s." + FIELD_PRESENTER_PROVIDER + ");";
-    private static final String STATEMENT_CALL_ATTACH = "$s." + FIELD_VIEW_DELEGATE + ".attachView($s);";
-    private static final String STATEMENT_CALL_DETACH = "$s." + FIELD_VIEW_DELEGATE + ".detachView();";
+    private static final String STATEMENT_CALL_ATTACH =
+            "$s." + FIELD_VIEW_DELEGATE + ".attachView($s);";
+    private static final String STATEMENT_CALL_DETACH =
+            "$s." + FIELD_VIEW_DELEGATE + ".detachView();";
+    private static final String STATEMENT_CALL_DESTROY =
+            "$s." + FIELD_VIEW_DELEGATE + ".destroy($s);";
 
     private static final String ASPECTJ_GEN_METHOD = "_aroundBody";
     private ClassPool pool;
@@ -90,14 +101,18 @@ public class ViewDelegateBinder extends WeaverProcessor {
                 injectDelegateField(ctClass, classInjector);
                 injectDelegateLifeCycleIntoFragment(ctClass, classInjector);
                 writeClass(ctClass);
-            }
-            else if(ctClass.hasAnnotation(CustomView.class)){
+            } else if (ctClass.hasAnnotation(CustomView.class)) {
                 log("Start weaving " + ctClass.getSimpleName());
                 ClassInjector classInjector = instrumentation.startWeaving(ctClass);
                 injectDelegateField(ctClass, classInjector);
                 injectDelegateLifeCycleIntoCustomView(ctClass, classInjector);
                 writeClass(ctClass);
-
+            } else if (ctClass.hasAnnotation(ConductorController.class)) {
+                log("Start weaving " + ctClass.getSimpleName());
+                ClassInjector classInjector = instrumentation.startWeaving(ctClass);
+                injectDelegateField(ctClass, classInjector);
+                injectDelegateLifeCycleIntoConductorController(ctClass, classInjector);
+                writeClass(ctClass);
             }
         }
     }
@@ -121,7 +136,7 @@ public class ViewDelegateBinder extends WeaverProcessor {
         CtMethod onStop = findBestMethod(ctClass, "onStop");
         boolean applied = dagger2Extension.apply(ctClass);
         AfterSuper(classInjector, onCreate,
-                   applied ? STATEMENT_CALL_INITIALIZE_WITH_FACTORY : STATEMENT_CALL_INITIALIZE);
+                applied ? STATEMENT_CALL_INITIALIZE_WITH_FACTORY : STATEMENT_CALL_INITIALIZE);
         AfterSuper(classInjector, onStart, STATEMENT_CALL_ATTACH);
         beforeSuper(classInjector, onStop, STATEMENT_CALL_DETACH);
     }
@@ -133,12 +148,12 @@ public class ViewDelegateBinder extends WeaverProcessor {
         CtMethod onPause = findBestMethod(ctClass, "onPause");
         boolean applied = dagger2Extension.apply(ctClass);
         AfterSuper(classInjector, onActivityCreated,
-                   applied ? STATEMENT_CALL_INITIALIZE_WITH_FACTORY : STATEMENT_CALL_INITIALIZE);
+                applied ? STATEMENT_CALL_INITIALIZE_WITH_FACTORY : STATEMENT_CALL_INITIALIZE);
         AfterSuper(classInjector, onResume, STATEMENT_CALL_ATTACH);
         beforeSuper(classInjector, onPause, STATEMENT_CALL_DETACH);
     }
 
-    private void injectDelegateLifeCycleIntoCustomView(CtClass ctClass,ClassInjector classInjector)
+    private void injectDelegateLifeCycleIntoCustomView(CtClass ctClass, ClassInjector classInjector)
             throws Exception {
         CtMethod onAttachedToWindow = findBestMethod(ctClass, "onAttachedToWindow");
         CtMethod onDetachedFromWindow = findBestMethod(ctClass, "onDetachedFromWindow");
@@ -146,9 +161,24 @@ public class ViewDelegateBinder extends WeaverProcessor {
         AfterSuper(classInjector, onAttachedToWindow, STATEMENT_CALL_ATTACH);
 
         AfterSuper(classInjector, onAttachedToWindow,
-                   applied ? STATEMENT_CALL_INITIALIZE_WITH_FACTORY : STATEMENT_CALL_INITIALIZE);
-//        atTheBeginning(classInjector, onDetachedFromWindow, STATEMENT_CALL_DETACH);
+                applied ? STATEMENT_CALL_INITIALIZE_WITH_FACTORY : STATEMENT_CALL_INITIALIZE);
+        //        afterSuperWithReturnType(classInjector, onDetachedFromWindow, STATEMENT_CALL_DETACH);
 
+    }
+
+    private void injectDelegateLifeCycleIntoConductorController(CtClass ctClass,
+            ClassInjector classInjector) throws Exception {
+        CtMethod onCreateView =
+                findBestMethod(ctClass, "onCreateView", LAYOUT_INFLATER_CLASS, VIEW_GROUP_CLASS);
+        CtMethod onAttach = findBestMethod(ctClass, "onAttach", VIEW_CLASS);
+        CtMethod onDetach = findBestMethod(ctClass, "onDetach", VIEW_CLASS);
+        CtMethod onDestroy = findBestMethod(ctClass, "onDestroy");
+        boolean applied = dagger2Extension.apply(ctClass);
+        afterSuperWithReturnType(classInjector, onCreateView,
+                applied ? STATEMENT_CALL_INITIALIZE_WITH_FACTORY : STATEMENT_CALL_INITIALIZE, true);
+        AfterSuper(classInjector, onAttach, STATEMENT_CALL_ATTACH);
+        beforeSuper(classInjector, onDetach, STATEMENT_CALL_DETACH);
+        beforeSuper(classInjector, onDestroy, STATEMENT_CALL_DESTROY);
     }
 
     /**
@@ -163,8 +193,8 @@ public class ViewDelegateBinder extends WeaverProcessor {
             baseMethod = ctClass.getDeclaredMethod(methodName, stringToCtClass(pool, params));
         } catch (NotFoundException e) {
             for (CtMethod ctMethod : ctClass.getMethods()) {
-                if (ctMethod.getName().equals(methodName) &&
-                        sameSignature(Arrays.asList(params), ctMethod)) {
+                if (ctMethod.getName().equals(methodName) && sameSignature(Arrays.asList(params),
+                        ctMethod)) {
                     baseMethod = ctMethod;
                     break;
                 }
@@ -221,27 +251,28 @@ public class ViewDelegateBinder extends WeaverProcessor {
         return Integer.valueOf(num);
     }
 
-    private void AfterSuper(ClassInjector classInjector, CtMethod method,
-                            String statement) throws Exception {
+    private void AfterSuper(ClassInjector classInjector, CtMethod method, String statement)
+            throws Exception {
         if (method.getName().contains(ASPECTJ_GEN_METHOD)) {
             statement = statement.replaceAll("\\$s", "\\ajc\\$this");
             String methodName =
                     method.getName().substring(0, method.getName().indexOf(ASPECTJ_GEN_METHOD));
             classInjector.insertMethod(method.getName(),
-                                       ctClassToString(method.getParameterTypes()))
+                    ctClassToString(method.getParameterTypes()))
                     .ifExists()
-                    .afterACallTo(methodName, statement).inject().inject();
+                    .afterACallTo(methodName, statement)
+                    .inject()
+                    .inject();
         } else {
             statement = statement.replaceAll("\\$s", "this");
             classInjector.insertMethod(method.getName(),
-                                       ctClassToString(method.getParameterTypes()))
+                    ctClassToString(method.getParameterTypes()))
                     .ifExistsButNotOverride()
-                    .override("{" +
-                                      "super." + method.getName() + "($$);" +
-                                      statement +
-                                      "}").inject()
+                    .override("{" + "super." + method.getName() + "($$);" + statement + "}")
+                    .inject()
                     .ifExists()
-                    .afterSuper(statement).inject()
+                    .afterSuper(statement)
+                    .inject()
                     .inject();
         }
     }
@@ -253,53 +284,78 @@ public class ViewDelegateBinder extends WeaverProcessor {
             String methodName =
                     method.getName().substring(0, method.getName().indexOf(ASPECTJ_GEN_METHOD));
             classInjector.insertMethod(method.getName(),
-                                       ctClassToString(method.getParameterTypes()))
+                    ctClassToString(method.getParameterTypes()))
                     .ifExists()
-                    .beforeACallTo(methodName, statement).inject().inject();
+                    .beforeACallTo(methodName, statement)
+                    .inject()
+                    .inject();
         } else {
             statement = statement.replaceAll("\\$s", "this");
             classInjector.insertMethod(method.getName(),
-                                       ctClassToString(method.getParameterTypes()))
+                    ctClassToString(method.getParameterTypes()))
                     .ifExistsButNotOverride()
-                    .override("{" +
-                                      statement +
-                                      "super." + method.getName() + "($$);" +
-                                      "}").inject()
+                    .override("{" + statement + "super." + method.getName() + "($$);" + "}")
+                    .inject()
                     .ifExists()
-                    .beforeSuper(statement).inject()
+                    .beforeSuper(statement)
+                    .inject()
                     .inject();
         }
-
     }
 
-    private void atTheBeginning(ClassInjector classInjector, CtMethod method,
-                                String statement) throws Exception {
+    private void afterSuperWithReturnType(ClassInjector classInjector, CtMethod method,
+            String statement, boolean returnSuperClass) throws Exception {
         if (method.getName().contains(ASPECTJ_GEN_METHOD)) {
             statement = statement.replaceAll("\\$s", "\\ajc\\$this");
+            String methodName =
+                    method.getName().substring(0, method.getName().indexOf(ASPECTJ_GEN_METHOD));
             classInjector.insertMethod(method.getName(),
                     ctClassToString(method.getParameterTypes()))
                     .ifExists()
-                    .atTheBeginning(statement).inject().inject();
+                    .afterACallTo(methodName, statement)
+                    .inject()
+                    .inject();
         } else {
             statement = statement.replaceAll("\\$s", "this");
+            String override;
+            if (returnSuperClass) {
+                //TODO refactor method
+                override = "{"
+                        + "android.view.View $$$supercall =  super."
+                        + method.getName()
+                        + "($$);"
+                        + statement
+                        + "return $$$supercall;"
+                        + "}";
+            } else {
+                override = "{" + "super." + method.getName() + "($$);" + statement + "}";
+            }
+            int methodLines = getMethodLines(classInjector.getCtClass(), method);
+            log("Method lines for " + method.getName() + " is " + methodLines + "");
             classInjector.insertMethod(method.getName(),
                     ctClassToString(method.getParameterTypes()))
                     .ifExistsButNotOverride()
-                    .override("{" +
-                            statement +
-                            "super." + method.getName() + "($$);" +
-                            "}").inject()
+                    .override(override)
+                    .inject()
                     .ifExists()
-                    .atTheBeginning(statement).inject()
+                    .atTheEnd(statement)
+                    .inject()
                     .inject();
         }
+    }
+
+    private int getMethodLines(CtClass ctClass, CtMethod method) {
+        if (!ctClass.equals(method.getDeclaringClass())) {
+            return 0;
+        }
+        int start = method.getMethodInfo().getLineNumber(0);
+        int end = method.getMethodInfo().getLineNumber(Integer.MAX_VALUE);
+        return end - start + 1;
     }
 
     private void insertDelegateField(ClassInjector classInjector, String delegateClassName)
             throws Exception {
-        classInjector.insertField(delegateClassName, FIELD_VIEW_DELEGATE)
-                .initializeIt()
-                .inject();
+        classInjector.insertField(delegateClassName, FIELD_VIEW_DELEGATE).initializeIt().inject();
     }
 
     void log(String message) {

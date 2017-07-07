@@ -41,7 +41,9 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.MirroredTypeException;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -51,6 +53,8 @@ import easymvp.annotation.ActivityView;
 import easymvp.annotation.CustomView;
 import easymvp.annotation.FragmentView;
 import easymvp.annotation.Presenter;
+import easymvp.annotation.PresenterId;
+import easymvp.annotation.conductor.ConductorController;
 import easymvp.compiler.generator.ClassGenerator;
 import easymvp.compiler.generator.DelegateClassGenerator;
 import easymvp.compiler.generator.PresenterLoaderGenerator;
@@ -62,10 +66,14 @@ import easymvp.compiler.generator.PresenterLoaderGenerator;
 public class EasyMVPProcessor extends AbstractProcessor {
 
     private static final String ANDROID_ACTIVITY_CLASS_NAME = "android.app.Activity";
+    private static final String ANDROID_SUPPORT_ACTIVITY_CLASS_NAME =
+            "android.support.v7.app.AppCompatActivity";
     private static final String ANDROID_FRAGMENT_CLASS_NAME = "android.app.Fragment";
     private static final String ANDROID_SUPPORT_FRAGMENT_CLASS_NAME =
             "android.support.v4.app.Fragment";
     private static final String ANDROID_CUSTOM_VIEW_CLASS_NAME = "android.view.View";
+    private static final String CONDUCTOR_CONTROLLER_CLASS_NAME =
+            "com.bluelinelabs.conductor.Controller";
     private static final String DELEGATE_CLASS_SUFFIX = "_ViewDelegate";
 
     private Messager messager;
@@ -75,7 +83,7 @@ public class EasyMVPProcessor extends AbstractProcessor {
 
     /** A flag that allow processor to generate presenter loaders only once to avoid IO exception */
     private boolean isLoadersCopied = false;
-
+    private boolean isSupportLoadersCopied = false;
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
@@ -92,6 +100,7 @@ public class EasyMVPProcessor extends AbstractProcessor {
         types.add(FragmentView.class.getCanonicalName());
         types.add(CustomView.class.getCanonicalName());
         types.add(Presenter.class.getCanonicalName());
+        types.add(ConductorController.class.getCanonicalName());
         return types;
     }
 
@@ -107,13 +116,16 @@ public class EasyMVPProcessor extends AbstractProcessor {
 
     private void generatePresenterLoaders() {
         if (!isLoadersCopied) {
-            PresenterLoaderGenerator supportLibraryPresenterLoader =
-                    new PresenterLoaderGenerator(true);
             PresenterLoaderGenerator
                     androidPresenterLoader = new PresenterLoaderGenerator(false);
-            write(supportLibraryPresenterLoader);
             write(androidPresenterLoader);
             isLoadersCopied = true;
+        }
+        if (!isSupportLoadersCopied) {
+            PresenterLoaderGenerator supportLibraryPresenterLoader =
+                    new PresenterLoaderGenerator(true);
+            write(supportLibraryPresenterLoader);
+            isSupportLoadersCopied = true;
         }
     }
 
@@ -141,8 +153,14 @@ public class EasyMVPProcessor extends AbstractProcessor {
         for (Element element : roundEnv.getElementsAnnotatedWith(CustomView.class)) {
             parseCustomView(element, delegateClassMap);
         }
+        for (Element element : roundEnv.getElementsAnnotatedWith(ConductorController.class)) {
+            parseConductorController(element, delegateClassMap);
+        }
         for (Element element : roundEnv.getElementsAnnotatedWith(Presenter.class)) {
             parsePresenterInjection(element, delegateClassMap);
+        }
+        for (Element element : roundEnv.getElementsAnnotatedWith(PresenterId.class)) {
+            parsePresenterId(element, delegateClassMap);
         }
         return delegateClassMap;
     }
@@ -158,18 +176,25 @@ public class EasyMVPProcessor extends AbstractProcessor {
             error("%s is abstract", element.getSimpleName());
             return;
         }
-        if (!Validator.isSubType(element, ANDROID_ACTIVITY_CLASS_NAME, processingEnv)) {
-            error("%s must extend Activity", element.getSimpleName());
+        boolean isActivity =
+                Validator.isSubType(element, ANDROID_ACTIVITY_CLASS_NAME, processingEnv);
+        boolean isSupportActivity =
+                Validator.isSubType(element, ANDROID_SUPPORT_ACTIVITY_CLASS_NAME, processingEnv);
+        if (!isActivity && !isSupportActivity) {
+            error("%s must extend Activity or AppCompatActivity", element.getSimpleName());
             return;
         }
-
         //getEnclosing for class type will returns its package/
         TypeElement enclosingElement = (TypeElement) element;
         DelegateClassGenerator delegateClassGenerator =
                 getDelegate(enclosingElement, delegateClassMap);
         ActivityView annotation = element.getAnnotation(ActivityView.class);
         delegateClassGenerator.setResourceID(annotation.layout());
-        delegateClassGenerator.setViewType(ViewType.ACTIVITY);
+        if (isSupportActivity) {
+            delegateClassGenerator.setViewType(ViewType.SUPPORT_ACTIVITY);
+        } else {
+            delegateClassGenerator.setViewType(ViewType.ACTIVITY);
+        }
         try {
             annotation.presenter();
         } catch (MirroredTypeException mte) {
@@ -243,6 +268,33 @@ public class EasyMVPProcessor extends AbstractProcessor {
         }
     }
 
+    private void parseConductorController(Element element,
+                                          Map<TypeElement, DelegateClassGenerator> delegateClassMap) {
+        if (!SuperficialValidation.validateElement(element)) {
+            error("Superficial validation error for %s", element.getSimpleName());
+            return;
+        }
+        if (!Validator.isNotAbstractClass(element)) {
+            error("%s is abstract", element.getSimpleName());
+            return;
+        }
+        if (!Validator.isSubType(element, CONDUCTOR_CONTROLLER_CLASS_NAME, processingEnv)) {
+            error("%s must extend View", element.getSimpleName());
+            return;
+        }
+        //getEnclosing for class type will returns its package/
+        TypeElement enclosingElement = (TypeElement) element;
+        DelegateClassGenerator delegateClassGenerator =
+                getDelegate(enclosingElement, delegateClassMap);
+        delegateClassGenerator.setViewType(ViewType.CONDUCTOR_CONTROLLER);
+        ConductorController annotation = element.getAnnotation(ConductorController.class);
+        try {
+            annotation.presenter();
+        } catch (MirroredTypeException mte) {
+            parsePresenter(delegateClassGenerator, mte);
+        }
+    }
+
     private void parsePresenterInjection(Element element,
                                          Map<TypeElement, DelegateClassGenerator> delegateClassMap) {
         //TODO print errors
@@ -263,6 +315,36 @@ public class EasyMVPProcessor extends AbstractProcessor {
             delegateClassGenerator.injectablePresenterInView(true);
         }
         delegateClassGenerator.setPresenterTypeInView(variableElement.asType().toString());
+    }
+
+    private void parsePresenterId(Element element,
+                                  Map<TypeElement, DelegateClassGenerator> delegateClassMap) {
+        if (!SuperficialValidation.validateElement(element)) {
+            error("Superficial validation error for %s", element.getSimpleName());
+            return;
+        }
+        if (Validator.isPrivate(element)) {
+            error("%s can't be private", element.getSimpleName());
+            return;
+        }
+        if (Validator.isMethod(element)) {
+            ExecutableType emeth = (ExecutableType) element.asType();
+            if (!emeth.getReturnType().getKind().equals(TypeKind.LONG) &&
+                    !emeth.getReturnType().getKind().equals(TypeKind.INT)) {
+                error("%s must have return type int or long", element);
+            }
+        } else {
+            TypeKind kind = element.asType().getKind();
+            if (kind != TypeKind.INT && kind != TypeKind.LONG) {
+                error("%s must be int or long", element.getSimpleName());
+                return;
+            }
+        }
+        String presenterId = element.toString();
+        DelegateClassGenerator delegateClassGenerator =
+                getDelegate((TypeElement) element.getEnclosingElement(),
+                        delegateClassMap);
+        delegateClassGenerator.setPresenterId(presenterId);
     }
 
     private void parsePresenter(DelegateClassGenerator delegateClassGenerator,

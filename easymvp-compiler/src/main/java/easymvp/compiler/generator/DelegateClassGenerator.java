@@ -29,8 +29,10 @@ import javax.lang.model.element.Modifier;
 import easymvp.compiler.ViewType;
 import easymvp.compiler.generator.decorator.ActivityDecorator;
 import easymvp.compiler.generator.decorator.BaseDecorator;
+import easymvp.compiler.generator.decorator.ConductorControllerDecorator;
 import easymvp.compiler.generator.decorator.CustomViewDecorator;
 import easymvp.compiler.generator.decorator.FragmentDecorator;
+import easymvp.compiler.generator.decorator.SupportActivityDecorator;
 import easymvp.compiler.generator.decorator.SupportFragmentDecorator;
 
 import static easymvp.compiler.util.ClassNames.PROVIDER;
@@ -52,6 +54,12 @@ public class DelegateClassGenerator extends ClassGenerator {
     private boolean injectablePresenterInView = false;
     private ClassName presenterTypeInView;
     private BaseDecorator decorator;
+
+    private String presenterId = "";
+
+    public String getPresenterId() {
+        return presenterId;
+    }
 
     public DelegateClassGenerator(String packageName, String className, ClassName viewClass) {
         super(packageName, className);
@@ -76,6 +84,9 @@ public class DelegateClassGenerator extends ClassGenerator {
             case ACTIVITY:
                 decorator = new ActivityDecorator(this);
                 break;
+            case SUPPORT_ACTIVITY:
+                decorator = new SupportActivityDecorator(this);
+                break;
             case FRAGMENT:
                 decorator = new FragmentDecorator(this);
                 break;
@@ -84,6 +95,9 @@ public class DelegateClassGenerator extends ClassGenerator {
                 break;
             case CUSTOM_VIEW:
                 decorator = new CustomViewDecorator(this);
+                break;
+            case CONDUCTOR_CONTROLLER:
+                decorator = new ConductorControllerDecorator(this);
                 break;
         }
     }
@@ -143,5 +157,9 @@ public class DelegateClassGenerator extends ClassGenerator {
 
     public int getResourceID() {
         return resourceID;
+    }
+
+    public void setPresenterId(String presenterId) {
+        this.presenterId = presenterId;
     }
 }
